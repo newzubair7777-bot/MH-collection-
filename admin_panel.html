@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Secure</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 450px; text-align: center; }
+        h2 { color: #333; margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; background: #000; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #333; }
+        
+        #adminContent { display: none; }
+        .product-list { text-align: left; margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
+        .item { background: #f9f9f9; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; }
+        .item span { font-weight: bold; color: #555; }
+        .del-btn { background: #ff4757; width: auto; padding: 6px 12px; font-size: 13px; }
+        .del-btn:hover { background: #ff6b81; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="loginBox">
+        <h2>Admin Login</h2>
+        <p style="color: #666; font-size: 14px;">Enter password to manage products</p>
+        <input type="password" id="passInput" placeholder="Password">
+        <button onclick="checkPass()">Login</button>
+    </div>
+
+    <div id="adminContent">
+        <h2>Add New Product</h2>
+        <input type="text" id="pName" placeholder="Product Name (e.g. Black Bag)">
+        <input type="number" id="pPrice" placeholder="Price (RS)">
+        <input type="text" id="pImage" placeholder="Image Link (URL)">
+        <button onclick="addProduct()">Add to Website</button>
+
+        <div class="product-list" id="productList">
+            <h3>Live Products</h3>
+            <div id="itemsContainer">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Firebase Configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyCsk2F8LAFD1vstABolOCuHIoGqr5P3ZRE",
+        authDomain: "mh-collection-75017.firebaseapp.com",
+        projectId: "mh-collection-75017",
+        storageBucket: "mh-collection-75017.firebasestorage.app",
+        messagingSenderId: "586581414643",
+        appId: "1:586581414643:web:91aaf351193aacd433dd86"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 1. Password Check
+    function checkPass() {
+        const pass = document.getElementById('passInput').value;
+        if(pass === "PasswordHamza") { // <--- Aap yahan password badal sakte hain
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+            loadProducts();
+        } else {
+            alert("Wrong Password! Please try again.");
+        }
+    }
+
+    // 2. Add Product to Firestore
+    function addProduct() {
+        const name = document.getElementById('pName').value;
+        const price = document.getElementById('pPrice').value;
+        const img = document.getElementById('pImage').value;
+
+        if(!name || !price) {
+            alert("Please enter Name and Price!");
+            return;
+        }
+
+        db.collection("products").add({
+            name: name,
+            price: price,
+            image: img || "https://via.placeholder.com/150",
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+            alert("Product added successfully!");
+            document.getElementById('pName').value = "";
+            document.getElementById('pPrice').value = "";
+            document.getElementById('pImage').value = "";
+        })
+        .catch((error) => {
+            alert("Error adding product: " + error.message);
+        });
+    }
+
+    // 3. Load & Display Products with Delete Option
+    function loadProducts() {
+        db.collection("products").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            const container = document.getElementById('itemsContainer');
+            container.innerHTML = "";
+            
+            if (snapshot.empty) {
+                container.innerHTML = "<p style='color:#999;'>No products live yet.</p>";
+                return;
+            }
+
+            snapshot.forEach((doc) => {
+                const p = doc.data();
+                container.innerHTML += `
+                    <div class="item">
+                        <span>${p.name} - RS ${p.price}</span>
+                        <button class="del-btn" onclick="deleteProduct('${doc.id}')">Delete</button>
+                    </div>
+                `;
+            });
+        });
+    }
+
+    // 4. Delete Product
+    function deleteProduct(id) {
+        if(confirm("Are you sure you want to delete this product?")) {
+            db.collection("products").doc(id).delete()
+            .then(() => {
+                alert("Product deleted!");
+            });
+        }
+    }
+</script>
+
+</body>
+</html>

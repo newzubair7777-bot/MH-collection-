@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MH Collection - Shop</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f4f4; padding-bottom: 50px; }
+        header { background: #000; color: #fff; padding: 20px; text-align: center; font-size: 22px; font-weight: bold; letter-spacing: 2px; position: sticky; top: 0; z-index: 100; }
+        
+        .grid { padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; padding-bottom: 15px; }
+        .card img { width: 100%; height: 160px; object-fit: cover; background: #ddd; }
+        .card h3 { margin: 10px 5px; font-size: 16px; }
+        .price { color: #2ecc71; font-weight: bold; font-size: 18px; display: block; margin-bottom: 10px; }
+        
+        .btn { background: #000; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 80%; margin: 0 auto; display: block; text-decoration: none; }
+
+        /* Popup Form Styling */
+        #orderModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #fff; padding: 20px; border-radius: 15px; width: 85%; max-width: 400px; position: relative; }
+        .modal-content h2 { margin-top: 0; font-size: 20px; }
+        .modal-content input, .modal-content textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .submit-btn { background: #27ae60; color: white; border: none; width: 100%; padding: 12px; border-radius: 5px; font-weight: bold; font-size: 16px; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 25px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <header>MH COLLECTION</header>
+
+    <div class="grid" id="grid"></div>
+
+    <div id="orderModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2>Complete Your Order</h2>
+            <p id="selectedItemName" style="font-weight: bold; color: #555;"></p>
+            <input type="text" id="custName" placeholder="Your Name" required>
+            <input type="number" id="custPhone" placeholder="WhatsApp Number" required>
+            <textarea id="custAddress" placeholder="Full Delivery Address" rows="3" required></textarea>
+            <button class="submit-btn" onclick="placeOrder()">Confirm Order</button>
+        </div>
+    </div>
+
+    <script>
+        const cfg = {
+            apiKey: "AIzaSyCsk2F8LAFD1vstABolOCuHIoGqr5P3ZRE",
+            authDomain: "mh-collection-75017.firebaseapp.com",
+            projectId: "mh-collection-75017",
+            storageBucket: "mh-collection-75017.firebasestorage.app",
+            messagingSenderId: "586581414643",
+            appId: "1:586581414643:web:91aaf351193aacd433dd86"
+        };
+
+        firebase.initializeApp(cfg);
+        const db = firebase.firestore();
+
+        let currentProduct = "";
+
+        // 1. Products Load Karna
+        db.collection("products").onSnapshot((snapshot) => {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = "";
+            snapshot.forEach((doc) => {
+                const p = doc.data();
+                grid.innerHTML += `
+                    <div class="card">
+                        <img src="${p.image || 'https://via.placeholder.com/150'}" alt="">
+                        <h3>${p.name}</h3>
+                        <span class="price">RS ${p.price}</span>
+                        <button class="btn" onclick="openModal('${p.name}')">Order Now</button>
+                    </div>
+                `;
+            });
+        });
+
+        // 2. Modal Functions
+        function openModal(name) {
+            currentProduct = name;
+            document.getElementById('selectedItemName').innerText = "Product: " + name;
+            document.getElementById('orderModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('orderModal').style.display = 'none';
+        }
+
+        // 3. Database mein Order Save Karna
+        function placeOrder() {
+            const name = document.getElementById('custName').value;
+            const phone = document.getElementById('custPhone').value;
+            const address = document.getElementById('custAddress').value;
+
+            if(!name || !phone || !address) {
+                alert("Please fill all details!");
+                return;
+            }
+
+            db.collection("orders").add({
+                product: currentProduct,
+                customerName: name,
+                customerPhone: phone,
+                address: address,
+                status: "Pending",
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(() => {
+                alert("Order Placed Successfully!");
+                closeModal();
+                // Form saaf kar dein
+                document.getElementById('custName').value = "";
+                document.getElementById('custPhone').value = "";
+                document.getElementById('custAddress').value = "";
+            })
+            .catch((error) => {
+                alert("Error placing order: " + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
