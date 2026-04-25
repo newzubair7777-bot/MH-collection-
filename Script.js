@@ -1,3 +1,4 @@
+// Firebase Config (Aapka existing config)
 const firebaseConfig = {
     apiKey: "AIzaSyCsk2F8LAFD1vstABol0CuH_6wQ18MNo9U",
     authDomain: "mh-collection-75017.firebaseapp.com",
@@ -11,52 +12,56 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const storage = firebase.storage();
 
-let cropper;
-let croppedBlob = null;
+// 1. Load Products (Sirf Products dikhayega)
+function loadProducts(cat = 'all') {
+    db.collection("products").onSnapshot((snapshot) => {
+        const list = document.getElementById('productList');
+        list.innerHTML = "";
+        
+        if (snapshot.empty) {
+            list.innerHTML = "<p style='text-align:center; width:100%;'>No items available.</p>";
+            return;
+        }
 
-// Toggle Admin Panel
-function toggleAdmin() {
-    const panel = document.getElementById('admin-panel');
-    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-}
-
-// Image Selection and Crop Setup
-const fileInput = document.getElementById('fileInput');
-fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = document.getElementById('image-to-crop');
-            img.src = event.target.result;
-            document.getElementById('crop-container').style.display = 'block';
-            
-            if (cropper) cropper.destroy();
-            cropper = new Cropper(img, {
-                aspectRatio: 1, // Square crop for products
-                viewMode: 1
-            });
-        };
-        reader.readAsDataURL(file);
-    }
-});
-
-function applyCrop() {
-    cropper.getCroppedCanvas().toBlob((blob) => {
-        croppedBlob = blob;
-        alert("Photo Cropped! Ab aap Upload kar sakte hain.");
-        document.getElementById('crop-container').style.display = 'none';
+        snapshot.forEach((doc) => {
+            const p = doc.data();
+            // Category Filter Check
+            if(cat === 'all' || p.category === cat) {
+                list.insertAdjacentHTML('beforeend', `
+                    <div class="product-card">
+                        <button class="del-btn" onclick="deleteProd('${doc.id}', '${p.image}')">&times;</button>
+                        <img src="${p.image || 'https://via.placeholder.com/300'}">
+                        <div style="padding:10px; text-align:center;">
+                            <h4 style="margin:5px 0;">${p.name}</h4>
+                            <p style="color:green; font-weight:bold;">Rs. ${p.price}</p>
+                            <button onclick="sendOrder('${p.name}', '${p.price}')" style="width:100%; background:black; color:white; border:none; padding:8px; border-radius:5px; cursor:pointer;">
+                                <i class="fas fa-shopping-cart"></i> Order Now
+                            </button>
+                        </div>
+                    </div>
+                `);
+            }
+        });
     });
 }
 
-// Upload Data to Firebase
+// 2. WhatsApp Order Function
+function sendOrder(name, price) {
+    const phone = "923001234567"; // Yahan client ka number aayega
+    const msg = `Assalam-o-Alaikum,\nI want to order:\n*Item:* ${name}\n*Price:* Rs. ${price}`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// 3. Admin Upload (Jo sirf Admin Modal se chalega)
 async function uploadProduct() {
     const name = document.getElementById('prodName').value;
     const price = document.getElementById('prodPrice').value;
+    const cat = document.getElementById('prodCat').value;
+    const file = document.getElementById('fileInput').files[0];
     const btn = document.getElementById('uploadBtn');
 
-    if (!name || !price || !croppedBlob) {
-        alert("Please fill name, price and CROP the photo first!");
+    if(!name || !price || !file) {
+        alert("Please fill all details and select a photo!");
         return;
     }
 
@@ -64,53 +69,44 @@ async function uploadProduct() {
     btn.disabled = true;
 
     try {
-        const fileName = Date.now() + ".jpg";
-        const storageRef = storage.ref('products/' + fileName);
-        await storageRef.put(croppedBlob);
-        const imgUrl = await storageRef.getDownloadURL();
+        // Image upload to Firebase Storage
+        const storageRef = storage.ref('products/' + Date.now() + "_" + file.name);
+        await storageRef.put(file);
+        const url = await storageRef.getDownloadURL();
 
+        // Save to Firestore
         await db.collection("products").add({
             name: name,
             price: price,
-            image: imgUrl,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            category: cat,
+            image: url,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert("Product Successfully Added!");
-        location.reload();
+        alert("Product Added Successfully!");
+        document.getElementById('prodName').value = "";
+        document.getElementById('prodPrice').value = "";
+        closeModals();
     } catch (error) {
         console.error(error);
-        alert("Error uploading!");
+        alert("Upload failed! Check Firebase Storage Rules.");
+    } finally {
+        btn.innerText = "Upload";
+        btn.disabled = false;
     }
 }
 
-// Load Products
-db.collection("products").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-    const list = document.getElementById('productList');
-    list.innerHTML = "";
-    snapshot.forEach((doc) => {
-        const p = doc.data();
-        const id = doc.id;
-        list.insertAdjacentHTML('beforeend', `
-            <div class="product-card">
-                <button class="delete-btn" onclick="deleteProduct('${id}', '${p.image}')"><i class="fas fa-trash"></i></button>
-                <div class="img-wrapper"><img src="${p.image}"></div>
-                <div class="info-box">
-                    <h3>${p.name}</h3>
-                    <p class="new-price">Rs.${p.price}</p>
-                    <button class="order-btn" onclick="window.open('https://wa.me/923XXXXXXXXX?text=I want to buy ${p.name}')">ORDER</button>
-                </div>
-            </div>
-        `);
-    });
-});
-
-// Delete Function
-async function deleteProduct(id, imgUrl) {
-    if (confirm("Kya aap yeh photo delete karna chahte hain?")) {
-        await db.collection("products").doc(id).delete();
-        // Storage se bhi delete karne ke liye (optional but good)
-        try { await storage.refFromURL(imgUrl).delete(); } catch(e){}
-        alert("Deleted!");
+// 4. Delete Function
+async function deleteProd(id, imgUrl) {
+    if(confirm("Are you sure you want to delete this product?")) {
+        try {
+            await db.collection("products").doc(id).delete();
+            alert("Product Deleted!");
+        } catch (e) {
+            alert("Error deleting!");
+        }
     }
 }
+
+// Initial Load
+loadProducts();
